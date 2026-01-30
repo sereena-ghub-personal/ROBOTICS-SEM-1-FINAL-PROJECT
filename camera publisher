@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+import cv2
+
+
+class CameraPublisher(Node):
+    def __init__(self):
+        super().__init__('camera_publisher')
+
+        # ---------------- Parameters ----------------
+        self.declare_parameter('device', 0)
+        self.declare_parameter('topic', 'camera_image')
+        self.declare_parameter('debug_topic', 'camera_image_debug')
+        self.declare_parameter('fps', 30.0)
+        self.declare_parameter('width', 640)
+        self.declare_parameter('height', 480)
+        self.declare_parameter('roi_height_ratio', 0.55)  # bottom 55%
+
+        self.device = int(self.get_parameter('device').value)
+        self.topic = str(self.get_parameter('topic').value)
+        self.debug_topic = str(self.get_parameter('debug_topic').value)
+        self.fps = float(self.get_parameter('fps').value)
+        self.width = int(self.get_parameter('width').value)
+        self.height = int(self.get_parameter('height').value)
+        self.roi_height_ratio = float(self.get_parameter('roi_height_ratio').value)
+
+        # ---------------- ROS ----------------
+        self.publisher_ = self.create_publisher(Image, self.topic, 10)
+        self.debug_pub_ = self.create_publisher(Image, self.debug_topic, 10)
+        self.bridge = CvBridge()
+
+        # ---------------- Camera ----------------
+        self.cap = cv2.VideoCapture(self.device)
+        if not self.cap.isOpened():
+            raise RuntimeError("Camera not opened")
+
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        self.cap.set(cv2.CAP_PROP_FPS, self.fps)
+
+        self.timer = self.create_timer(1.0 / max(self.fps, 1.0), self.timer_callback)
+
+        self.get_logger().info(
+            f"Camera opened dev={self.device} {self.width}x{self.height} @ {self.fps}fps"
+        )
+        self.get_logger().info(f"Publishing ROI bgr8 on /{self.topic}")
+        self.get_logger().info(f"Debug ROI view on /{self.debug_topic}")
+
+    def timer_callback(self):
+        ret, frame = self.cap.read()
+        if not ret:
+            return
+
+        # ---------------- ROI (bottom) ----------------
+        h, w, _ = frame.shape
+        roi_h = int(h * self.roi_height_ratio)
+        roi = frame[h - roi_h : h, :]
+
+        # ---------------- Publish ROI as BGR ----------------
+        msg = self.bridge.cv2_to_imgmsg(roi, encoding="bgr8")
+        self.publisher_.publish(msg)
+
+        # ---------------- Debug overlay ----------------
+        dbg = roi.copy()
+        cv2.putText(
+            dbg,
+            f"ROI bottom {int(self.roi_height_ratio*100)}% (TrackController does adaptive threshold)",
+            (10, 25),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 255, 0),
+            2
+        )
+        self.debug_pub_.publish(self.bridge.cv2_to_imgmsg(dbg, encoding="bgr8"))
+
+    def destroy_node(self):
+        if self.cap:
+            self.cap.release()
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = CameraPublisher()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
