@@ -17,7 +17,7 @@ class CameraPublisher(Node):
         self.declare_parameter('fps', 30.0)
         self.declare_parameter('width', 640)
         self.declare_parameter('height', 480)
-        self.declare_parameter('roi_height_ratio', 0.55)  # bottom 55%
+        self.declare_parameter('roi_height_ratio', 0.70)  # bottom 70% - wider view to see both lines
 
         self.device = int(self.get_parameter('device').value)
         self.topic = str(self.get_parameter('topic').value)

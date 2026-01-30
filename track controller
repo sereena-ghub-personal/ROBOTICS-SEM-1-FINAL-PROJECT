@@ -22,7 +22,7 @@ class TrackController(Node):
         self.declare_parameter('baud', 9600)
 
         # camera already publishes ROI (Option A)
-        self.declare_parameter('row_sample_ratio', 0.60)
+        self.declare_parameter('row_sample_ratio', 0.50)  # sample middle of ROI to see both lines
 
         # detection robustness
         self.declare_parameter('min_white_pixels', 45) # increased to filter noise
