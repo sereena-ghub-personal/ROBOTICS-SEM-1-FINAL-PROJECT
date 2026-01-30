@@ -25,17 +25,17 @@ class TrackController(Node):
         self.declare_parameter('row_sample_ratio', 0.60)
 
         # detection robustness
-        self.declare_parameter('min_white_pixels', 35) #reduced from 40 values, changing : 30 -> 35
+        self.declare_parameter('min_white_pixels', 45) # increased to filter noise
         self.declare_parameter('min_lane_width_px', 100) # reduced from 200 # STRICT - reject crossing lines
         self.declare_parameter('max_lane_width_ratio', 0.95) # increased from 0.85
-        self.declare_parameter('max_white_ratio', 0.75) # increased from 0.65
-        
-        # adaptive threshold
-        self.declare_parameter('adapt_block_size', 51)   # odd
-        self.declare_parameter('adapt_C', -8)
+        self.declare_parameter('max_white_ratio', 0.55) # reduced to reject noisy frames
 
-        # morphology
-        self.declare_parameter('morph_kernel', 6)
+        # adaptive threshold - tuned for noise reduction
+        self.declare_parameter('adapt_block_size', 61)   # larger = smoother threshold
+        self.declare_parameter('adapt_C', -12)  # more negative = only detect bright white lines
+
+        # morphology - noise removal
+        self.declare_parameter('morph_kernel', 7)  # larger kernel removes more small noise spots
 
         # controller (follow)
         self.declare_parameter('kp', 0.0012)
