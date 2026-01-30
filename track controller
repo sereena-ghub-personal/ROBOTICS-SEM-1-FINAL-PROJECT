@@ -269,8 +269,9 @@ class TrackController(Node):
             right_x = int(np.mean(clusters[-1]))
             lane_width = right_x - left_x
 
-            if lane_width < self.min_lane_width_px or lane_width > int(w * self.max_lane_width_ratio):
-                return None, bin_img, dbg, "bad_width"
+            # COMMENTED OUT: bad_width check causes stopping during turns
+            # if lane_width < self.min_lane_width_px or lane_width > int(w * self.max_lane_width_ratio):
+            #     return None, bin_img, dbg, "bad_width"
 
             lane_center = (left_x + right_x) // 2
             self.last_good_center = lane_center
@@ -304,12 +305,12 @@ class TrackController(Node):
             self.lost_count += 1
 
             reason_map = {
-                "too_bright": "STOP: too bright / no track",
-                "too_few_white": "STOP: lane not detected",
-                "no_lines": "STOP: no lines detected",
-                "bad_width": "STOP: invalid lane width",
+                "too_bright": "CONTINUING: too bright / no track",
+                "too_few_white": "CONTINUING: lane not detected",
+                "no_lines": "CONTINUING: no lines detected",
+                "bad_width": "CONTINUING: invalid lane width",
             }
-            txt = reason_map.get(status, "STOP: lane invalid")
+            txt = reason_map.get(status, "CONTINUING: lane invalid")
             
             cv2.putText(dbg, txt, (10, 25), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
@@ -318,12 +319,18 @@ class TrackController(Node):
             cv2.putText(dbg, f"MODE: {self.mode}", (10, 85),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
+            # MODIFIED: Never fully stop - keep moving with last known values
+            # This allows the robot to continue through turns and brief detection losses
             if self.lost_count < self.lost_count_stop:
                 v_hold = max(0.0, self.last_v * 0.7)
                 w_hold = self.last_w * 0.7
                 self.send_rate_limited(v_hold, w_hold)
             else:
-                self.send("STOP")
+                # Instead of stopping, continue with reduced speed and last angular velocity
+                v_hold = max(0.0, self.base_v * 0.5)  # Keep moving at half speed
+                w_hold = self.last_w * 0.5  # Maintain turn direction
+                self.send_rate_limited(v_hold, w_hold)
+                # self.send("STOP")  # COMMENTED OUT - don't stop
 
             self.debug_pub.publish(self.bridge.cv2_to_imgmsg(dbg, encoding='bgr8'))
             return
