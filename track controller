@@ -37,14 +37,14 @@ class TrackController(Node):
         # morphology - noise removal
         self.declare_parameter('morph_kernel', 7)  # larger kernel removes more small noise spots
 
-        # controller (follow)
-        self.declare_parameter('kp', 0.0012)
-        self.declare_parameter('base_v', 0.32)
-        self.declare_parameter('max_w', 0.80)
-        self.declare_parameter('deadband_px', 40.0)
+        # controller (follow) - tuned for smooth single-line following
+        self.declare_parameter('kp', 0.0008)  # reduced for smoother turns (less zigzag)
+        self.declare_parameter('base_v', 0.30)  # slightly slower for better control
+        self.declare_parameter('max_w', 0.50)  # reduced max turn rate for smoother motion
+        self.declare_parameter('deadband_px', 25.0)  # smaller deadband for tighter centering
 
         # ---------- SMOOTHING ----------
-        self.declare_parameter('err_alpha', 0.15)
+        self.declare_parameter('err_alpha', 0.10)  # lower = smoother response (less reactive)
 
         # ---------- RATE LIMITING ----------
         self.declare_parameter('v_accel_limit', 0.15)
@@ -241,27 +241,31 @@ class TrackController(Node):
         img_center = w // 2
 
         if len(clusters) == 1:
-            # SINGLE LINE MODE
+            # SINGLE LINE MODE - Smart line following
             line_x = int(np.mean(clusters[0]))
-            
-            if self.last_good_center is not None:
-                lane_center = self.last_good_center
-            else:
-                if line_x < img_center:
-                    lane_center = line_x + self.assumed_lane_width // 2
-                else:
-                    lane_center = line_x - self.assumed_lane_width // 2
-            
             lane_width = self.assumed_lane_width
-            if line_x < lane_center:
+
+            # Determine which line we're seeing and calculate where center should be
+            # If line is on LEFT side of image → it's the left boundary → stay to its RIGHT
+            # If line is on RIGHT side of image → it's the right boundary → stay to its LEFT
+            if line_x < img_center:
+                # Seeing LEFT line - robot should be to the right of it
+                lane_center = line_x + lane_width // 2
                 left_x = line_x
                 right_x = line_x + lane_width
+                side_txt = "LEFT LINE"
             else:
+                # Seeing RIGHT line - robot should be to the left of it
+                lane_center = line_x - lane_width // 2
                 left_x = line_x - lane_width
                 right_x = line_x
-            
+                side_txt = "RIGHT LINE"
+
+            # Update last good center for reference
+            self.last_good_center = lane_center
+
             cv2.circle(dbg, (line_x, row_y), 6, (0, 255, 255), -1)
-            cv2.putText(dbg, "SINGLE LINE - MAINTAINING POSITION", (10, dbg.shape[0] - 15),
+            cv2.putText(dbg, f"SINGLE: {side_txt} - CENTERING", (10, dbg.shape[0] - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         else:
             # DUAL LINE MODE
