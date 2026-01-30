@@ -24,31 +24,31 @@ class TrackController(Node):
         # camera already publishes ROI (Option A)
         self.declare_parameter('row_sample_ratio', 0.50)  # sample middle of ROI to see both lines
 
-        # detection robustness
-        self.declare_parameter('min_white_pixels', 45) # increased to filter noise
-        self.declare_parameter('min_lane_width_px', 100) # reduced from 200 # STRICT - reject crossing lines
-        self.declare_parameter('max_lane_width_ratio', 0.95) # increased from 0.85
-        self.declare_parameter('max_white_ratio', 0.55) # reduced to reject noisy frames
+        # detection robustness - relaxed for better line detection
+        self.declare_parameter('min_white_pixels', 25)  # lowered to detect lines easier
+        self.declare_parameter('min_lane_width_px', 60)  # reduced for curves
+        self.declare_parameter('max_lane_width_ratio', 0.95)
+        self.declare_parameter('max_white_ratio', 0.70)  # increased to allow more white
 
-        # adaptive threshold - tuned for noise reduction
-        self.declare_parameter('adapt_block_size', 61)   # larger = smoother threshold
-        self.declare_parameter('adapt_C', -12)  # more negative = only detect bright white lines
+        # adaptive threshold - less strict for better detection
+        self.declare_parameter('adapt_block_size', 51)   # smaller for sharper detection
+        self.declare_parameter('adapt_C', -8)  # less negative = easier line detection
 
-        # morphology - noise removal
-        self.declare_parameter('morph_kernel', 7)  # larger kernel removes more small noise spots
+        # morphology - smaller kernel to preserve line details
+        self.declare_parameter('morph_kernel', 5)
 
-        # controller (follow) - tuned for smooth single-line following
-        self.declare_parameter('kp', 0.0008)  # reduced for smoother turns (less zigzag)
-        self.declare_parameter('base_v', 0.30)  # slightly slower for better control
-        self.declare_parameter('max_w', 0.50)  # reduced max turn rate for smoother motion
-        self.declare_parameter('deadband_px', 25.0)  # smaller deadband for tighter centering
+        # controller (follow) - tuned for responsive curve handling
+        self.declare_parameter('kp', 0.0018)  # increased for better curve response
+        self.declare_parameter('base_v', 0.28)  # slightly slower for curves
+        self.declare_parameter('max_w', 0.80)  # increased for sharper turns
+        self.declare_parameter('deadband_px', 15.0)  # smaller for tighter tracking
 
         # ---------- SMOOTHING ----------
-        self.declare_parameter('err_alpha', 0.10)  # lower = smoother response (less reactive)
+        self.declare_parameter('err_alpha', 0.25)  # higher = faster response to curves
 
         # ---------- RATE LIMITING ----------
         self.declare_parameter('v_accel_limit', 0.15)
-        self.declare_parameter('w_accel_limit', 0.05)
+        self.declare_parameter('w_accel_limit', 0.15)  # increased for faster steering changes
 
         # ---------- FRAME SKIPPING ----------
         self.declare_parameter('process_every_n_frames', 2)
