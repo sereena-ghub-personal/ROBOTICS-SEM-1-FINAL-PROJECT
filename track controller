@@ -24,18 +24,18 @@ class TrackController(Node):
         # camera already publishes ROI (Option A)
         self.declare_parameter('row_sample_ratio', 0.50)  # sample middle of ROI to see both lines
 
-        # detection robustness - relaxed for better line detection
-        self.declare_parameter('min_white_pixels', 25)  # lowered to detect lines easier
+        # detection robustness - tuned for noisy environment
+        self.declare_parameter('min_white_pixels', 40)  # require more consistent line
         self.declare_parameter('min_lane_width_px', 60)  # reduced for curves
         self.declare_parameter('max_lane_width_ratio', 0.95)
-        self.declare_parameter('max_white_ratio', 0.70)  # increased to allow more white
+        self.declare_parameter('max_white_ratio', 0.60)  # reject very noisy frames
 
-        # adaptive threshold - less strict for better detection
-        self.declare_parameter('adapt_block_size', 51)   # smaller for sharper detection
-        self.declare_parameter('adapt_C', -8)  # less negative = easier line detection
+        # adaptive threshold - strict to only detect bright white lines
+        self.declare_parameter('adapt_block_size', 71)   # larger = smoother, less local noise
+        self.declare_parameter('adapt_C', -20)  # very negative = only bright white detected
 
-        # morphology - smaller kernel to preserve line details
-        self.declare_parameter('morph_kernel', 5)
+        # morphology - aggressive noise removal
+        self.declare_parameter('morph_kernel', 9)  # larger kernel removes noise blobs
 
         # controller (follow) - tuned for responsive curve handling
         self.declare_parameter('kp', 0.0018)  # increased for better curve response
