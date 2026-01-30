@@ -1,0 +1,51 @@
+# Track Controller Configuration
+# These parameters can be loaded via ros2 param load
+
+track_controller:
+  ros__parameters:
+    # Topics
+    image_topic: "camera_image"
+    cmd_vel_topic: "cmd_vel"
+
+    # Lane detection
+    row_sample_ratio: 0.60
+    min_white_pixels: 45
+    min_lane_width_px: 100
+    max_lane_width_ratio: 0.95
+    max_white_ratio: 0.55
+
+    # Adaptive threshold
+    adapt_block_size: 61
+    adapt_C: -12
+
+    # Morphology
+    morph_kernel: 7
+
+    # Controller
+    kp: 0.0008
+    base_v: 0.30
+    max_w: 0.50
+    deadband_px: 25.0
+
+    # Smoothing
+    err_alpha: 0.10
+
+    # Rate limiting
+    v_accel_limit: 0.15
+    w_accel_limit: 0.05
+
+    # Frame skipping
+    process_every_n_frames: 2
+
+    # Single line mode
+    assumed_lane_width_px: 120
+
+camera_publisher:
+  ros__parameters:
+    device: 0
+    topic: "camera_image"
+    debug_topic: "camera_image_debug"
+    fps: 30.0
+    width: 640
+    height: 480
+    roi_height_ratio: 0.55
