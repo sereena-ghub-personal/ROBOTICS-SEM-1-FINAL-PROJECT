@@ -1,0 +1,165 @@
+#include <Arduino.h>
+#include <Servo.h>
+
+Servo leftMotor;
+Servo rightMotor;
+
+constexpr int PIN_LEFT  = 5;
+constexpr int PIN_RIGHT = 6;
+
+constexpr int NEUTRAL_US = 1500;
+constexpr int MIN_US     = 1000;
+constexpr int MAX_US     = 2000;
+
+// Increase if foam is high friction and robot barely moves (try 350..450)
+constexpr int SCALE_US   = 400;
+
+// Your verified correct signs:
+constexpr int LEFT_SIGN  = -1;   // LEFT forward = < 1500
+constexpr int RIGHT_SIGN = +1;   // RIGHT forward = > 1500
+
+String line;
+
+unsigned long lastCmdMs = 0;
+constexpr unsigned long CMD_TIMEOUT_MS = 1200;
+
+// ---- NEW: small deadband so "near neutral" prints STOP ----
+constexpr int STOP_BAND_US = 10;
+
+static int clamp_us(int us) {
+  if (us < MIN_US) return MIN_US;
+  if (us > MAX_US) return MAX_US;
+  return us;
+}
+
+static void setMotorsUs(int l_us, int r_us) {
+  leftMotor.writeMicroseconds(clamp_us(l_us));
+  rightMotor.writeMicroseconds(clamp_us(r_us));
+}
+
+static void stopMotors() {
+  setMotorsUs(NEUTRAL_US, NEUTRAL_US);
+}
+
+// ---- NEW: direction helpers that match YOUR sign logic ----
+// For left wheel: if LEFT_SIGN=-1 then "forward" = PWM < 1500
+static const char* leftDirFromUs(int l_us) {
+  int d = l_us - NEUTRAL_US;
+  if (abs(d) <= STOP_BAND_US) return "STOP";
+  // if LEFT_SIGN=+1 -> forward when d>0, if LEFT_SIGN=-1 -> forward when d<0
+  bool forward = (LEFT_SIGN * d) > 0;
+  return forward ? "FWD" : "REV";
+}
+
+// For right wheel: if RIGHT_SIGN=+1 then "forward" = PWM > 1500
+static const char* rightDirFromUs(int r_us) {
+  int d = r_us - NEUTRAL_US;
+  if (abs(d) <= STOP_BAND_US) return "STOP";
+  bool forward = (RIGHT_SIGN * d) > 0;
+  return forward ? "FWD" : "REV";
+}
+
+static void printMotorLog(const char* tag, float v, float w, float l, float r, int l_us, int r_us) {
+  Serial.print(tag);
+  Serial.print(" | v="); Serial.print(v, 3);
+  Serial.print(" w="); Serial.print(w, 3);
+  Serial.print(" | l="); Serial.print(l, 3);
+  Serial.print(" r="); Serial.print(r, 3);
+  Serial.print(" | l_us="); Serial.print(l_us);
+  Serial.print(" (L:"); Serial.print(leftDirFromUs(l_us)); Serial.print(")");
+  Serial.print(" r_us="); Serial.print(r_us);
+  Serial.print(" (R:"); Serial.print(rightDirFromUs(r_us)); Serial.print(")");
+  Serial.println();
+}
+
+// ---- NEW: unified command apply (used by VW + TEST) ----
+static void applyVW(float v, float w) {
+  // clamp
+  if (v < -1) v = -1; if (v > 1) v = 1;
+  if (w < -1) w = -1; if (w > 1) w = 1;
+
+  // differential mixing
+  float l = v + w;
+  float r = v - w;
+
+  if (l < -1) l = -1; if (l > 1) l = 1;
+  if (r < -1) r = -1; if (r > 1) r = 1;
+
+  int l_us = NEUTRAL_US + LEFT_SIGN  * (int)(l * SCALE_US);
+  int r_us = NEUTRAL_US + RIGHT_SIGN * (int)(r * SCALE_US);
+
+  setMotorsUs(l_us, r_us);
+
+  printMotorLog("OK VW", v, w, l, r, l_us, r_us);
+}
+
+void setup() {
+  Serial.begin(9600);
+  delay(500);
+
+  leftMotor.attach(PIN_LEFT);
+  rightMotor.attach(PIN_RIGHT);
+
+  stopMotors();
+  lastCmdMs = millis();
+
+  Serial.println("Teensy ready. Commands: VW v w | STOP | TEST");
+  Serial.println("NOTE: Direction is interpreted using LEFT_SIGN/RIGHT_SIGN.");
+}
+
+void loop() {
+  // safety timeout
+  if (millis() - lastCmdMs > CMD_TIMEOUT_MS) {
+    stopMotors();
+  }
+
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+
+    if (c == '\n' || c == '\r') {
+      line.trim();
+      if (line.length() == 0) { line = ""; continue; }
+
+      lastCmdMs = millis();
+
+      if (line == "STOP") {
+        stopMotors();
+        Serial.println("OK STOP");
+      }
+      else if (line == "TEST") {
+        // ---- FIXED: TEST now uses the SAME VW logic, so labels match behavior ----
+
+        Serial.println("TEST: forward 1s (VW 0.3 0.0)");
+        applyVW(0.3f, 0.0f);
+        delay(1000);
+
+        Serial.println("TEST: stop 0.5s");
+        stopMotors();
+        delay(500);
+
+        Serial.println("TEST: spin left 1s (VW 0.0 0.3)");
+        applyVW(0.0f, 0.3f);
+        delay(1000);
+
+        Serial.println("TEST: stop");
+        stopMotors();
+        Serial.println("OK TEST");
+      }
+      else if (line.startsWith("VW ")) {
+        float v, w;
+        if (sscanf(line.c_str(), "VW %f %f", &v, &w) == 2) {
+          applyVW(v, w);
+        } else {
+          Serial.println("ERR VW format (use: VW v w)");
+        }
+      }
+      else {
+        Serial.println("ERR Unknown (use: VW v w | STOP | TEST)");
+      }
+
+      line = "";
+    } else {
+      line += c;
+    }
+  }
+}
